@@ -54,7 +54,7 @@ def distance(origin, destination):
 # MERGE DATA
 
 def _merge_external_data(X):
-    __file__ = os.path.join('submissions', 'submits', 'estimator.py')
+    __file__ = os.path.join('submissions', 'submit', 'estimator.py')
     filepath = os.path.join(os.path.dirname(__file__), 
                             'external_data.csv')
     
@@ -193,13 +193,6 @@ def get_estimator():
     dummy_ = FunctionTransformer(get_dummy)
     lasso_select = FunctionTransformer(_selectfeatures)
     
-
-    esti = [('random', RandomForestRegressor()),
-        ('random_forest', ExtraTreesRegressor()),
-            ("xgb",XGBRegressor(n_estimators=500))]
-
-
-    regressor = StackingRegressor(estimators=esti,
-                 final_estimator=LGBMRegressor(n_estimators=500))
+    regressor = XGBRegressor(n_estimators=200)
 
     return make_pipeline(data_merger, dist_, date_encoder, dummy_, lasso_select, regressor)
