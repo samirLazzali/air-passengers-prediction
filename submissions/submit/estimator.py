@@ -7,7 +7,7 @@ from scipy.stats import mode
 import numpy as np
 import warnings
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
-from lightgbm import LGBMRegressor
+from lightgbm import LGBMRegressor 
 
 def distance(origin, destination):
     """
@@ -89,7 +89,6 @@ def merge_population (X):
 
 
 def _merge_external_data(X):
-    __file__ = os.path.join('submissions', 'submit', 'estimator.py')
     filepath = os.path.join(os.path.dirname(__file__), 
                             'external_data.csv')
     
@@ -219,11 +218,10 @@ def get_estimator():
     date_encoder = FunctionTransformer(_encoder_dates)
     dist_ = FunctionTransformer(compute_dist)
     dummy_ = FunctionTransformer(get_dummy)
-    soustraction__ = FunctionTransformer(soustraction)
     popu = FunctionTransformer(merge_population)
+    soustraction__ = FunctionTransformer(soustraction)
     lasso_select = FunctionTransformer(_selectfeatures)
     
-    regressor = LGBMRegressor()
+    regressor = LGBMRegressor(n_estimators=200, n_jobs=-1)
 
-    return make_pipeline(date_encoder, dist_, popu, data_merger,dummy_, soustraction__,regressor)
-
+    return make_pipeline(date_encoder, dist_, popu, data_merger,dummy_, soustraction__, regressor)

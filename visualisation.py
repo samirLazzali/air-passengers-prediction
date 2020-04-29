@@ -19,7 +19,7 @@ def plot_stages(reg,X_train,y_train,X_test,y_test,ax,title=""):
     learning_rate=reg.learning_rate
     max_depth = reg.max_depth
     
-    ax.set_title('RMSE per stage for :'+str(title),fontsize=9)
+    ax.set_title('RMSE : '+str(title),fontsize=9)
     ax.plot(np.arange(reg.n_estimators), train_score, 'b-', label='Training Set RMSE')
     ax.plot(np.arange(reg.n_estimators), test_score, 'r-', label='Test Set RMSE')
     ax.set_xlim((0,reg.n_estimators))
@@ -42,7 +42,7 @@ def plot_coeff_importances(reg,data_columns,ax,title=""):
     feature_names = X_columns[ordering]
     x = np.arange(len(feature_names))
     
-    ax.set_title('Importances for :'+str(title))
+    ax.set_title('Importances : '+str(title))
     ax.bar(x, importances)
     ax.set_xticks(x + 0.5)
     ax.set_xticklabels(feature_names, rotation=90, fontsize=8)
