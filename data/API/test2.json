@@ -1,0 +1,12 @@
+{
+  "Header": [
+    {
+      "status": "Failed",
+      "request_time": "2020-05-04T14:58:20.647-04:00",
+      "url": "https://aqs.epa.gov/data/api/dailyData/byState?email=datame@yopmail.com",
+      "error": [
+        "variable is missing or the value is empty: key"
+      ]
+    }
+  ]
+}
