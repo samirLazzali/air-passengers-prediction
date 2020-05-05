@@ -6,7 +6,7 @@ import math
 from scipy.stats import mode
 import numpy as np
 import warnings
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 from lightgbm import LGBMRegressor 
 
 def distance(origin, destination):
@@ -50,13 +50,13 @@ def parse_date(x):
     date = pd.to_datetime(x, format="%Y-%m-%d")
     return pd.Series([date.year, date.month, date.weekday(), date.week])
 
+
 def _encoder_dates(X):
     X[["year","month","weekday","week"]] = X[
     "DateOfDeparture"].apply(parse_date)
-    X["isweekend"] = X["weekday"] >= 5
-    X["isweekend"] = X["isweekend"].astype(int)
-    
     return X
+
+date_encoder = FunctionTransformer(_encoder_dates)
 
 def compute_dist(X):  
     external_dico = {'PHL': {'lat': 39.87195, 'long': -75.24114, 
@@ -87,33 +87,40 @@ def merge_population (X):
                        external_dico[x["Departure"]]['pop_2011'], axis=1)                
     return X
 
+  
 
 def _merge_external_data(X):
+    """
+    Pour ajouter une donnée indexé par les aeroport et le temps : Première partie
+    Pour ajouter une donnée indéxé par le temps : Deuxième partie
+    """
+    
+    # Importation des données et parsage de la date
+    
     filepath = os.path.join(os.path.dirname(__file__), 
                             'external_data.csv')
-    
-    # Importation des données 
-    
     X["DateOfDeparture"] = pd.to_datetime(X['DateOfDeparture'])
     X_external = pd.read_csv(filepath, parse_dates=["Date"], index_col=0)
     
     
-    # Merge sur les départs de vols
+    # 1 – Partie : Merge des données indexées par les départs 
     
-    X_Departure = X_external.iloc[:,:-1]
+    X_Departure = X_external[['Date', 'AirPort', "Net_domestic_migration_rate_per_1000_hab",
+                               'Min TemperatureC',"city_population","Median_income",
+                              'CloudCover','TOTAL_DEPARTURE', "unemployment"]]
+    
     X_merged_Departure = pd.merge(X, X_Departure, 
                         how='left', 
                         left_on=['DateOfDeparture', 'Departure'],
                         right_on = ["Date","AirPort"])
     X_merged_Departure.drop(columns=["Date","AirPort"], inplace=True)
     
+    # 1 – Partie : Merge sur les données indéxées par les arrivées 
     
-    # Merge sur les arrivées de vols 
-    
-    features = list(X_external.columns)
-    del features[-2]
-    
-    X_Arrival = X_external[features]
+    X_Arrival = X_external[['Date', 'AirPort', "Net_domestic_migration_rate_per_1000_hab",
+                               'Min TemperatureC',"city_population", "Median_income",
+                              'CloudCover','TOTAL_DESTINATION','unemployment']]
+
     X_merged_Arrival = pd.merge(X, X_Arrival, 
                         how='left', 
                         left_on=['DateOfDeparture', 'Arrival'],
@@ -122,106 +129,66 @@ def _merge_external_data(X):
     X_merged_Arrival.drop(columns=["Date","AirPort"], inplace=True)
     
     
-    # Merge des deux 
-    join = list(X_merged_Arrival.columns)[:13]
+    # Merge des deux tables (variable départ-arrivé) 
+    # sur (join) notre table en entrée (il faut faire attention à l'ordre de la pipeline)
+    
+    join = ['DateOfDeparture', 'Departure', 'Arrival','WeeksToDeparture',
+            "std_wtd","year","month","weekday","week","Distance",
+            "population_Arrival","population_departure"]
+    
     X_out = pd.merge(X_merged_Departure, X_merged_Arrival, 
                      how='left', on=join, suffixes=("_depart",'_arrive'))
     
-    X_out.drop(columns=["Holiday_arrive"], inplace=True)
-    X_out.rename(columns={"Holiday_depart":'Holiday'}, inplace=True)    
-    return X_out
+    
+    # 2 Partie – On ajoute les données seulement indexées par le temps 
+    
+    X_out = X_out.merge(X_external[["Date", "AirPort","Events","Holiday",
+                            'INDEX_PRICE','Index_passengers','Price']], how='left',
+                        left_on=["DateOfDeparture","Arrival"], right_on=["Date","AirPort"])
+      
+    
+    return X_out.drop(columns=['Date','AirPort'])
+
 
 
 def get_dummy(X):
-    X = X.join(pd.get_dummies(X["year"],prefix='year'))
-    X = X.join(pd.get_dummies(X["month"],prefix='month'))
-    X = X.join(pd.get_dummies(X["Holiday"],prefix='holi'))
-    X = X.join(pd.get_dummies(X["week"],prefix='week'))
-    X = X.join(pd.get_dummies(X["weekday"],prefix='week_day'))
-    X = X.join(pd.get_dummies(X["Events_arrive"],prefix="_arri"))
-    X = X.join(pd.get_dummies(X["Events_depart"],prefix="_dep"))
-    X = X.join(pd.get_dummies(X["Departure"], prefix='dep'))
+    X = X.join(pd.get_dummies(X["Events"]))
+    X = X.join(pd.get_dummies(X["Departure"], prefix='_dep'))
     X = X.join(pd.get_dummies(X["Arrival"],prefix='_arri'))
     
-    
-    
-    # Encodage des trajets
-    X["Trajet"] = X["Departure"]+ '-' +  X["Arrival"] 
-    X = X.join(pd.get_dummies(X["Trajet"],prefix='traj_'))
-    
-    return X.drop(columns=['year','month','week',
-                           'weekday',"week","Departure",'Arrival',
-                           "Trajet",'DateOfDeparture',
-                           'Events_depart',"Events_arrive"])
-
-
-def soustraction(X):
-    var_depart = []
-    var_arriv = []
-
-    for i in X.columns:
-        if i[-7:] == "_depart":
-            var_depart.append(i)
-        if i[-7:] == '_arrive':
-            var_arriv.append(i)
-        else :
-            pass
-    
-    for i,j in zip(var_depart,var_arriv):
-        X[str(i[:-7])] = X[i] - X[j]
-    return X
+    return X.drop(columns=["Events","Departure",'Arrival',
+                           'DateOfDeparture'])
 
 
 def _selectfeatures(X):
+  
+	array(['WeeksToDeparture', 'std_wtd', 'year', 'month', 'weekday', 'week',
+       'Distance', 'population_Arrival', 'population_departure',
+       'Net_domestic_migration_rate_per_1000_hab_depart',
+       'Dew PointC_depart', 'city_population_depart',
+       'Median_income_depart', 'CloudCover_depart', 'TOTAL_DEPARTURE',
+       'Net_domestic_migration_rate_per_1000_hab_arrive',
+       'Dew PointC_arrive', 'city_population_arrive',
+       'Median_income_arrive', 'CloudCover_arrive', 'TOTAL_DESTINATION',
+       'Holiday', 'Index_passengers', 'Cloud', '_dep_DFW', '_dep_DTW',
+       '_dep_EWR', '_dep_IAH', '_dep_JFK', '_dep_LAX', '_dep_LGA',
+       '_dep_MIA', '_dep_ORD', '_dep_SFO', '_arri_DFW', '_arri_DTW',
+       '_arri_EWR', '_arri_IAH', '_arri_JFK', '_arri_LAX', '_arri_LGA',
+       '_arri_PHX'])
+	return X[selected_features]
 
-    selected_features = np.array(['WeeksToDeparture', 'std_wtd', 'isweekend', 'Distance',
-       'population_Arrival', 'population_departure',
-       'Max TemperatureC_depart', 'Mean TemperatureC_depart',
-       'Min TemperatureC_depart', 'Dew PointC_depart',
-       'MeanDew PointC_depart', 'Min DewpointC_depart',
-       'Mean Humidity_depart', 'Max Sea Level PressurehPa_depart',
-       'Mean Sea Level PressurehPa_depart',
-       'Min Sea Level PressurehPa_depart', 'Max Wind SpeedKm/h_depart',
-       'Mean Wind SpeedKm/h_depart', 'Max Gust SpeedKm/h_depart',
-       'WindDirDegrees_depart', 'Holiday', 'TOTAL_DEPARTURE',
-       'Max TemperatureC_arrive', 'Mean TemperatureC_arrive',
-       'Min TemperatureC_arrive', 'Dew PointC_arrive',
-       'MeanDew PointC_arrive', 'Min DewpointC_arrive',
-       'Max Humidity_arrive', 'Mean Humidity_arrive',
-       'Min Humidity_arrive', 'Max Sea Level PressurehPa_arrive',
-       'Mean Sea Level PressurehPa_arrive',
-       'Min Sea Level PressurehPa_arrive', 'Min VisibilitykM_arrive',
-       'Max Wind SpeedKm/h_arrive', 'Mean Wind SpeedKm/h_arrive',
-       'Max Gust SpeedKm/h_arrive', 'WindDirDegrees_arrive',
-       'TOTAL_DESTINATION', 'year_2011', 'year_2012', 'year_2013',
-       'month_12', 'week_1', 'week_10', 'week_14', 'week_27', 'week_35',
-       'week_37', 'week_44', 'week_47', 'week_51', 'week_52',
-       'week_day_0', 'week_day_1', 'week_day_2', 'week_day_3',
-       'week_day_4', 'week_day_5', 'week_day_6', 'dep_BOS', 'dep_LGA',
-       'dep_MIA', 'dep_ORD', '_arri_LAX', '_arri_LGA', '_arri_ORD',
-       'traj__ATL-PHL', 'traj__DFW-LAX', 'traj__JFK-LAX', 'traj__JFK-MCO',
-       'traj__JFK-SFO', 'traj__LAX-JFK', 'traj__LGA-ORD', 'traj__ORD-LGA',
-       'traj__SFO-ATL', 'traj__SFO-JFK', 'Max TemperatureC',
-       'Mean TemperatureC', 'Min TemperatureC', 'MeanDew PointC',
-       'Min DewpointC', 'Min Humidity', 'Max Sea Level PressurehPa',
-       'Mean Sea Level PressurehPa', 'Mean Wind SpeedKm/h',
-       'Max Gust SpeedKm/h'])
-
-    return X[selected_features]
 
 def get_estimator():
 
     warnings.filterwarnings("ignore")
-
 
     data_merger = FunctionTransformer(_merge_external_data)
     date_encoder = FunctionTransformer(_encoder_dates)
     dist_ = FunctionTransformer(compute_dist)
     dummy_ = FunctionTransformer(get_dummy)
     popu = FunctionTransformer(merge_population)
-    soustraction__ = FunctionTransformer(soustraction)
     lasso_select = FunctionTransformer(_selectfeatures)
     
-    regressor = LGBMRegressor(n_estimators=200, n_jobs=-1)
+    regressor = LGBMRegressor(num_leaves = 45, n_estimators = 2000)
 
-    return make_pipeline(date_encoder, dist_, popu, data_merger,dummy_, soustraction__, regressor)
+    return make_pipeline(date_encoder, dist_, popu, data_merger, dummy_, regressor)
