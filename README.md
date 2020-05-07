@@ -1,17 +1,9 @@
-# RAMP - Air Passengers
+# RAMP Jupyter Notebook on the air passengers dataset
 
+This Machine Learning Project (on RAMP) conducted as part of M2 IMSD at Paris-Saclay University has been done in collaboration with [Thierry Gamero](https://github.com/titigmr)
 
-This Machine Learning Project (on RAMP) conducted as part of M2 IMSD has been done in collaboration with [Thierry Gamero](https://github.com/titigmr)
-
-
-
-# RAMP starting kit on the air passengers dataset
-
-
-[![Build Status](https://travis-ci.org/ramp-kits/air_passengers.svg?branch=master)](https://travis-ci.org/ramp-kits/air_passengers)
-
-
-## Getting started
+## Getting started 
+[Forked from here](https://github.com/ramp-kits/air_passengers)
 
 ### Install
 
