@@ -1,3 +1,10 @@
+# RAMP - Air Passengers
+
+
+This Machine Learning Project (on RAMP) conducted as part of M2 IMSD has been done in collaboration with [Thierry Gamero](https://github.com/titigmr)
+
+
+
 # RAMP starting kit on the air passengers dataset
 
 
